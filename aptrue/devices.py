@@ -1,7 +1,7 @@
 """Detección e inventario de dispositivos de almacenamiento (multiplataforma).
 
 - Linux: /sys/block
-- Windows: \\\\.\\PhysicalDriveN (con tamaños vía ioctl)
+- Windows: Get-Disk (PowerShell) con fallback a \\\\.\\PhysicalDriveN vía CreateFileW
 - macOS: diskutil
 """
 
@@ -11,7 +11,6 @@ import dataclasses
 import glob
 import os
 import re
-import shutil
 import subprocess
 import sys
 
@@ -56,6 +55,7 @@ def _read_first_line(filepath: str) -> str:
 
 
 # ---------------------------------------------------------------- Linux ----
+
 
 def _detect_type(sys_path: str, removable: bool) -> str:
     if re.search(r"nvme\d+n\d+$", sys_path):
@@ -140,77 +140,120 @@ def _list_devices_linux() -> list[StorageDevice]:
 
 # -------------------------------------------------------------- Windows ----
 
+INVALID_HANDLE = 0xFFFFFFFFFFFFFFFF
+
+
+def _win_create_file(path: str, access: int):
+    """Abre un device path con CreateFileW; devuelve handle o None.
+
+    access=0 (query) no requiere privilegios de administrador.
+    """
+    import ctypes
+
+    kernel32 = ctypes.windll.kernel32
+    kernel32.CreateFileW.restype = ctypes.c_void_p
+    kernel32.CreateFileW.argtypes = [
+        ctypes.c_wchar_p,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+    ]
+    handle = kernel32.CreateFileW(path, access, 3, None, 3, 0, None)
+    if handle is None or handle == INVALID_HANDLE or handle == 0:
+        return None
+    return handle
+
+
 def _windows_disk_size(path: str) -> int:
-    """Tamaño del disco físico con IOCTL_DISK_GET_LENGTH_INFO."""
+    """Tamaño del disco físico con IOCTL_DISK_GET_LENGTH_INFO (sin admin)."""
     import ctypes
     import struct
 
     IOCTL_DISK_GET_LENGTH_INFO = 0x0007405C
     kernel32 = ctypes.windll.kernel32
-    GENERIC_READ = 0x80000000
-    OPEN_EXISTING = 3
-    handle = kernel32.CreateFileW(path, GENERIC_READ, 3, None, OPEN_EXISTING, 0, None)
-    if handle == -1 or handle == 0xFFFFFFFFFFFFFFFF:
+    handle = _win_create_file(path, 0)
+    if handle is None:
         return 0
     try:
         buf = ctypes.create_string_buffer(8)
         ret = kernel32.DeviceIoControl(
-            handle, IOCTL_DISK_GET_LENGTH_INFO, None, 0, buf, 8, None, None
+            ctypes.c_void_p(handle), IOCTL_DISK_GET_LENGTH_INFO, None, 0, buf, 8, None, None
         )
         if ret:
             return struct.unpack("<Q", bytes(buf))[0]
     finally:
-        kernel32.CloseHandle(handle)
+        kernel32.CloseHandle(ctypes.c_void_p(handle))
     return 0
 
 
-def _list_devices_windows() -> list[StorageDevice]:
-    devices: list[StorageDevice] = []
-    import ctypes
+def _run_powershell_json(command: str):
+    """Ejecuta PowerShell y devuelve el JSON parseado o None."""
+    import json
 
-    for i in range(64):
-        path = f"\\\\.\\PhysicalDrive{i}"
-        try:
-            handle_exists = os.path.exists(path) or _try_open_win(path)
-        except OSError:
-            handle_exists = False
-        if not handle_exists:
+    try:
+        proc = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", command],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if proc.returncode != 0 or not proc.stdout.strip():
+        return None
+    try:
+        data = json.loads(proc.stdout.strip())
+    except json.JSONDecodeError:
+        return None
+    if isinstance(data, dict):
+        data = [data]
+    return data
+
+
+def _list_devices_windows_powershell() -> list[StorageDevice] | None:
+    """Enumera discos con Get-Disk (funciona sin ser administrador)."""
+    data = _run_powershell_json("Get-Disk | ConvertTo-Json -Compress")
+    if data is None:
+        return None
+    devices = []
+    for d in data:
+        number = d.get("DeviceId")
+        if number is None:
+            number = d.get("Number")
+        size = d.get("Size")
+        if number is None or not size:
             continue
-        size = _windows_disk_size(path)
-        if size == 0:
-            continue
-        removable = i >= 0  # refinado abajo con bus type si es posible
+        bus = str(d.get("BusType", "")).lower()
+        device_type = "disco"
+        if "nvme" in bus:
+            device_type = "NVMe SSD"
+        elif "usb" in bus:
+            device_type = "MicroSD / USB"
+        else:
+            rotation = d.get("RotationSpeed")
+            if isinstance(rotation, int):
+                device_type = "HDD" if rotation > 0 else "SSD"
         devices.append(
             StorageDevice(
-                path=path,
-                name=f"PhysicalDrive{i}",
-                size_bytes=size,
-                removable=False,
-                model=_win_disk_model(i),
-                device_type="disco",
+                path=f"\\\\.\\PhysicalDrive{number}",
+                name=f"PhysicalDrive{number}",
+                size_bytes=int(size),
+                removable=bus in ("usb", "sd", "mmc"),
+                model=str(d.get("FriendlyName") or ""),
+                serial=str(d.get("SerialNumber") or ""),
+                vendor=str(d.get("Manufacturer") or ""),
+                device_type=device_type,
             )
         )
     return devices
 
 
-def _try_open_win(path: str) -> bool:
-    import ctypes
-
-    try:
-        kernel32 = ctypes.windll.kernel32
-        handle = kernel32.CreateFileW(
-            path, 0, 3, None, 3, 0, None
-        )  # 0 = query access only
-        if handle == -1 or handle == 0xFFFFFFFFFFFFFFFF:
-            return False
-        kernel32.CloseHandle(handle)
-        return True
-    except Exception:
-        return False
-
-
 def _win_disk_model(index: int) -> str:
-    """Modelo del disco vía PowerShell Get-PhysicalDisk (si está disponible)."""
+    """Modelo del disco vía PowerShell (fallback)."""
     try:
         proc = subprocess.run(
             [
@@ -231,14 +274,45 @@ def _win_disk_model(index: int) -> str:
         return ""
 
 
+def _list_devices_windows_probe() -> list[StorageDevice]:
+    """Fallback: probe directo de \\\\.\\PhysicalDrive0..31 vía CreateFileW."""
+    devices: list[StorageDevice] = []
+    for i in range(32):
+        path = f"\\\\.\\PhysicalDrive{i}"
+        size = _windows_disk_size(path)
+        if size == 0:
+            continue
+        devices.append(
+            StorageDevice(
+                path=path,
+                name=f"PhysicalDrive{i}",
+                size_bytes=size,
+                removable=False,
+                model=_win_disk_model(i),
+                device_type="disco",
+            )
+        )
+    return devices
+
+
+def _list_devices_windows() -> list[StorageDevice]:
+    devs = _list_devices_windows_powershell()
+    if devs:
+        return devs
+    return _list_devices_windows_probe()
+
+
 def _get_device_windows(path: str) -> StorageDevice | None:
     m = re.search(r"PhysicalDrive(\d+)$", path)
     if not m:
         return None
+    index = int(m.group(1))
+    for dev in _list_devices_windows():
+        if dev.name == f"PhysicalDrive{index}":
+            return dev
     size = _windows_disk_size(path)
     if size == 0:
         return None
-    index = int(m.group(1))
     return StorageDevice(
         path=path,
         name=f"PhysicalDrive{index}",
@@ -251,12 +325,12 @@ def _get_device_windows(path: str) -> StorageDevice | None:
 
 # ----------------------------------------------------------------- macOS ----
 
+
 def _list_devices_macos() -> list[StorageDevice]:
     try:
         proc = subprocess.run(
             ["diskutil", "list", "-plist"],
             capture_output=True,
-            text=True,
             timeout=15,
             check=False,
         )
@@ -265,18 +339,17 @@ def _list_devices_macos() -> list[StorageDevice]:
     import plistlib
 
     try:
-        data = plistlib.loads(proc.stdout.encode() if isinstance(proc.stdout, str) else proc.stdout)
+        data = plistlib.loads(proc.stdout)
     except Exception:
         return []
     devices = []
     for d in data.get("AllDisksAndPartitions", []):
         identifier = d.get("DeviceIdentifier", "")
-        if identifier.startswith(("disk", "image")):
-            if not re.fullmatch(r"disk\d+", identifier):
-                continue
+        if not re.fullmatch(r"disk\d+", identifier):
+            continue
         size = d.get("TotalSize", 0)
         internal = d.get("Internal", False)
-        if identifier.startswith("disk") and size > 0:
+        if size > 0:
             devices.append(
                 StorageDevice(
                     path=f"/dev/{identifier}",
@@ -290,7 +363,8 @@ def _list_devices_macos() -> list[StorageDevice]:
     return devices
 
 
-# -------------------------------------------------------------- API común ----
+# ------------------------------------------------------------- API común ----
+
 
 def get_device(path: str) -> StorageDevice | None:
     """Devuelve información de un dispositivo dado su path."""
@@ -317,11 +391,11 @@ def list_devices() -> list[StorageDevice]:
 
 def is_whole_disk(path: str) -> bool:
     """True si el path apunta a un disco completo y no a una partición."""
-    name = os.path.basename(os.path.realpath(path))
     if IS_WINDOWS:
-        return re.fullmatch(r"\\\\.\\PhysicalDrive\d+", os.path.realpath(path)) is not None
+        return bool(re.search(r"PhysicalDrive\d+$", path))
+    name = os.path.basename(os.path.realpath(path))
     if IS_MACOS:
-        return re.fullmatch(r"disk\d+", name) is not None
+        return bool(re.fullmatch(r"disk\d+", name))
     if not re.fullmatch(r"(sd[a-z]+|nvme\d+n\d+|mmcblk\d+|vd[a-z]|hd[a-z])", name):
         return False
     return os.path.exists(f"/sys/block/{name}")

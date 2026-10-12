@@ -36,3 +36,25 @@ jobs:
           python-version: "3.12"
       - name: Syntax check
         run: python -m py_compile aptrue/*.py main.py
+
+  detection-smoke:
+    name: Detección real de discos
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e .
+      - name: List devices (PowerShell y probe)
+        shell: pwsh
+        run: |
+          python -c "from aptrue.devices import list_devices; devs = list_devices(); print(f'{len(devs)} discos detectados'); [print(f'  {d.path} {d.device_type} {d.size_human} {d.model}') for d in devs]"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          python -m aptrue.cli list
+      - name: Dump bruto para diagnóstico
+        shell: pwsh
+        run: |
+          Get-Disk | ConvertTo-Json -Compress
+          Get-PhysicalDisk | ConvertTo-Json -Compress
