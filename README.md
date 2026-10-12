@@ -1,6 +1,6 @@
 # APTrueStorage
 
-Herramienta en Python para verificar la **legitimidad, velocidad y autenticidad** de dispositivos de almacenamiento: HDD, SSD NVMe y tarjetas MicroSD.
+Herramienta para verificar la **legitimidad, velocidad y autenticidad** de dispositivos de almacenamiento: HDD, SSD NVMe y tarjetas MicroSD.
 
 Inspirada en herramientas como `f3` (Fight Flash Fraud): detecta discos y tarjetas falsificadas que reportan más capacidad de la real, mide velocidades reales y consulta la salud SMART.
 
