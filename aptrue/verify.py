@@ -88,6 +88,30 @@ def _check_block(data: bytes, index: int, nonce: bytes) -> tuple[bool, bool]:
     return stored_index == index, False
 
 
+def _full_write(fd: int, data: bytes) -> int:
+    """Escribe todo el buffer, manejando escrituras parciales (Windows)."""
+    view = memoryview(data)
+    while view:
+        n = os.write(fd, view)
+        if n <= 0:
+            break
+        view = view[n:]
+    return len(data) - len(view)
+
+
+def _full_read(fd: int, size: int) -> bytes:
+    """Lee exactamente size bytes (o menos en EOF), manejando lecturas parciales."""
+    chunks = []
+    remaining = size
+    while remaining > 0:
+        chunk = os.read(fd, remaining)
+        if not chunk:
+            break
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
+
+
 def verify_device(
     device: str,
     capacity_bytes: int,
@@ -111,7 +135,7 @@ def verify_device(
     try:
         for index in range(total_blocks):
             block = _make_block(index, nonce)
-            os.write(fd, block)
+            _full_write(fd, block)
             report.blocks_written += 1
             if on_progress and index % 16 == 0:
                 on_progress("escritura", index + 1, total_blocks)
@@ -122,7 +146,7 @@ def verify_device(
         os.lseek(fd, 0, os.SEEK_SET)
         read_start = time.monotonic()
         for index in range(report.blocks_written):
-            data = os.read(fd, BLOCK_SIZE)
+            data = _full_read(fd, BLOCK_SIZE)
             if len(data) < BLOCK_SIZE:
                 break
             ok, zeroed = _check_block(data, index, nonce)
