@@ -34,20 +34,59 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
-        run: |
-          pip install pyinstaller .
-          if [ "${{ runner.os }}" = "Linux" ]; then sudo apt-get update && sudo apt-get install -y smartmontools; fi
+      - name: Install Python dependencies
+        run: pip install pyinstaller .
         shell: bash
 
-      - name: Build executable
-        run: pyinstaller --onefile --name aptrue --collect-submodules aptrue aptrue/cli.py
+      - name: Bundle smartmontools (Windows)
+        if: runner.os == 'Windows'
         shell: bash
+        run: |
+          curl -sL -o smartmontools.zip https://sourceforge.net/projects/smartmontools/files/smartmontools/7.5/smartmontools-7.5-1.win.zip/download
+          unzip -q smartmontools.zip
+          find . -name "smartctl*" -type f
+          mkdir -p bundle
+          cp smartmontools-*/bin/smartctl.exe bundle/ || find . -name smartctl.exe -exec cp {} bundle/ \;
+          ls -la bundle/
+
+      - name: Bundle smartmontools (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p bundle
+          if command -v smartctl >/dev/null; then
+            cp "$(command -v smartctl)" bundle/
+          else
+            if [ "$RUNNER_OS" = "macOS" ]; then brew install smartmontools; else sudo apt-get update -qq && sudo apt-get install -y -qq smartmontools; fi
+            cp "$(command -v smartctl)" bundle/
+          fi
+          ls -la bundle/
+
+      - name: Build executable
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            pyinstaller --onefile --name aptrue --add-data "bundle;." aptrue/cli.py
+          else
+            pyinstaller --onefile --name aptrue --add-data "bundle:." aptrue/cli.py
+          fi
 
       - name: Rename with platform
         shell: bash
         run: |
           mv dist/aptrue${{ matrix.ext }} dist/aptrue-${{ runner.os }}${{ matrix.ext }}
+
+      - name: Smoke test
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            ./dist/aptrue-Windows.exe --version
+            ./dist/aptrue-Windows.exe list || true
+          else
+            chmod +x dist/aptrue-${{ runner.os }}
+            ./dist/aptrue-${{ runner.os }} --version
+            ./dist/aptrue-${{ runner.os }} list || true
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import dataclasses
+import os
 import shutil
 import subprocess
+import sys
 
 
 @dataclasses.dataclass
@@ -44,14 +46,28 @@ def _to_int(value: str) -> int | None:
         return None
 
 
+def _find_smartctl() -> str | None:
+    """Busca smartctl en PATH, junto al ejecutable y dentro del bundle PyInstaller."""
+    found = shutil.which("smartctl")
+    if found:
+        return found
+    if getattr(sys, "frozen", False):
+        base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(sys.executable)))
+        for candidate in (os.path.join(base, "smartctl"), os.path.join(base, "smartctl.exe")):
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                return candidate
+    return None
+
+
 def read_smart(device: str) -> SmartReport:
     report = SmartReport(device=device)
-    if shutil.which("smartctl") is None:
+    smartctl = _find_smartctl()
+    if smartctl is None:
         return report
 
     try:
         proc = subprocess.run(
-            ["smartctl", "-a", device],
+            [smartctl, "-a", device],
             capture_output=True,
             text=True,
             timeout=60,
