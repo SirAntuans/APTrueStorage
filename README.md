@@ -54,11 +54,39 @@ Para SMART, instala `smartmontools`:
 sudo apt install smartmontools   # Debian/Ubuntu
 ```
 
-## Uso (requiere root para pruebas destructivas)
+## Uso
+
+### Modo interactivo (recomendado)
+
+Ejecuta el programa **sin argumentos** (o doble clic en `aptrue-Windows.exe`) y aparece un menú para elegir qué probar:
+
+```
+==========================
+ APTrueStorage 0.1.2
+==========================
+Verificación de legitimidad de dispositivos de almacenamiento
+
+--- Menú principal ---
+  1. Listar dispositivos
+  2. Salud SMART de un dispositivo
+  3. Benchmark de velocidad
+  4. Verificar autenticidad (DESTRUCTIVA)
+  5. Informe completo (SMART + velocidad)
+  q. Salir
+
+Elige una opción:
+```
+
+El menú guía todo el proceso: lista los discos detectados, te deja elegir uno por número, y antes de cualquier prueba destructiva pide confirmación escribiendo `BORRAR`. No necesitas recordar ningún parámetro.
+
+### Modo CLI (avanzado)
+
+Todos los comandos siguen disponibles para automatización y scripts:
 
 ```bash
 # Lista los dispositivos
 sudo aptrue list
+
 
 # Información detallada
 aptrue info /dev/sdb

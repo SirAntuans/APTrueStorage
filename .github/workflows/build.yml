@@ -87,11 +87,11 @@ jobs:
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
             ./dist/aptrue-Windows.exe --version
-            ./dist/aptrue-Windows.exe list || true
+            echo q | ./dist/aptrue-Windows.exe || true
           else
             chmod +x dist/aptrue-${{ runner.os }}
             ./dist/aptrue-${{ runner.os }} --version
-            ./dist/aptrue-${{ runner.os }} list || true
+            echo q | ./dist/aptrue-${{ runner.os }} || true
           fi
 
       - name: Generate checksums

@@ -163,7 +163,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    # Sin argumentos (doble clic en el exe): modo interactivo
+    raw_argv = sys.argv[1:] if argv is None else list(argv)
+    if not raw_argv:
+        from .interactive import main_interactive
+
+        return main_interactive()
+    args = parser.parse_args(raw_argv)
     try:
         return args.func(args)
     except ValueError as exc:
