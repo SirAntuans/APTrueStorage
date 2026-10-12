@@ -14,6 +14,34 @@ Inspirada en herramientas como `f3` (Fight Flash Fraud): detecta discos y tarjet
 - **SMART**: temperatura, horas encendido, sectores reasignados/pendientes, desgaste NVMe (requiere `smartctl`).
 - Salida JSON en todos los subcomandos (`--json`) para integración con otros sistemas.
 
+## Descarga del ejecutable
+
+Cada vez que se publica un *release* (o en cada push a `main`), GitHub Actions **compila automáticamente** un ejecutable standalone para:
+
+- **Windows**: `aptrue-Windows.exe` (no requiere Python instalado)
+- **Linux**: `aptrue-Linux`
+- **macOS**: `aptrue-macOS`
+
+Descárgalo desde la pestaña **Releases** o **Actions → Artifacts**. Ejecútalo directamente:
+
+```bash
+# Windows (como administrador)
+aptrue-Windows.exe list
+aptrue-Windows.exe verify E:
+
+# Linux
+chmod +x aptrue-Linux
+sudo ./aptrue-Linux verify /dev/sdb
+```
+
+## Compilación manual del ejecutable
+
+```bash
+pip install pyinstaller .
+pyinstaller --onefile --name aptrue aptrue/cli.py
+# El ejecutable queda en dist/aptrue (dist/aptrue.exe en Windows)
+```
+
 ## Instalación
 
 ```bash

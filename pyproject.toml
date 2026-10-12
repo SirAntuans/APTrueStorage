@@ -14,5 +14,8 @@ authors = [{ name = "llsfo" }]
 [project.scripts]
 aptrue = "aptrue.cli:main"
 
+[tool.pyinstaller]
+name = "aptrue"
+
 [tool.setuptools]
 packages = ["aptrue"]

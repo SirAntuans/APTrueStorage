@@ -1,0 +1,62 @@
+name: Build executables
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: aptrue-windows
+            ext: .exe
+          - os: ubuntu-latest
+            artifact: aptrue-linux
+            ext: ""
+          - os: macos-latest
+            artifact: aptrue-macos
+            ext: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller .
+          if [ "${{ runner.os }}" = "Linux" ]; then sudo apt-get update && sudo apt-get install -y smartmontools; fi
+        shell: bash
+
+      - name: Build executable
+        run: pyinstaller --onefile --name aptrue --collect-submodules aptrue aptrue/cli.py
+        shell: bash
+
+      - name: Rename with platform
+        shell: bash
+        run: |
+          mv dist/aptrue${{ matrix.ext }} dist/aptrue-${{ runner.os }}${{ matrix.ext }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/*
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
