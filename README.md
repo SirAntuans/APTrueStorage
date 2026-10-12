@@ -1,0 +1,87 @@
+# APTrueStorage
+
+Herramienta en Python para verificar la **legitimidad, velocidad y autenticidad** de dispositivos de almacenamiento: HDD, SSD NVMe y tarjetas MicroSD.
+
+Inspirada en herramientas como `f3` (Fight Flash Fraud): detecta discos y tarjetas falsificadas que reportan más capacidad de la real, mide velocidades reales y consulta la salud SMART.
+
+> ⚠️ **Advertencia**: los comandos `verify` y `speed --destructive` **borran todos los datos** del dispositivo. Haz copia de seguridad antes.
+
+## Características
+
+- **Inventario de dispositivos**: detecta discos conectados con tipo (HDD / SSD NVMe / MicroSD-USB), modelo, serie y tamaño.
+- **Verificación de autenticidad** (destructiva): escribe bloques firmados en todo el dispositivo y los relee. Si el fabricante falsificó la capacidad, los bloques más allá de la capacidad real salen corruptos o rellenos con ceros/0xFF → el disco es **FALSIFICADO**.
+- **Benchmark de velocidad**: escritura y lectura secuencial en MB/s.
+- **SMART**: temperatura, horas encendido, sectores reasignados/pendientes, desgaste NVMe (requiere `smartctl`).
+- Salida JSON en todos los subcomandos (`--json`) para integración con otros sistemas.
+
+## Instalación
+
+```bash
+pip install .
+```
+
+Para SMART, instala `smartmontools`:
+
+```bash
+sudo apt install smartmontools   # Debian/Ubuntu
+```
+
+## Uso (requiere root para pruebas destructivas)
+
+```bash
+# Lista los dispositivos
+sudo aptrue list
+
+# Información detallada
+aptrue info /dev/sdb
+
+# Verificación de autenticidad (DESTRUCTIVA)
+sudo aptrue verify /dev/sdb
+
+# Limitar la prueba a N bloques de 1 MiB (prueba rápida)
+sudo aptrue verify /dev/sdb --max-blocks 1024
+
+# Benchmark de velocidad (lectura no destructiva)
+sudo aptrue speed /dev/sdb
+
+# Benchmark completo con escritura (DESTRUCTIVA)
+sudo aptrue speed /dev/sdb --size-mb 1024 --destructive
+
+# Salud SMART
+sudo aptrue smart /dev/nvme0n1
+
+# Informe completo: SMART + velocidad + verificación
+sudo aptrue full /dev/sdb --verify
+```
+
+## Códigos de salida de `verify`
+
+| Código | Significado |
+|---|---|
+| 0 | Dispositivo auténtico |
+| 1 | Error (permisos, dispositivo inválido) |
+| 2 | Dispositivo **falsificado** |
+
+## Ejemplo de informe
+
+```
+Dispositivo: /dev/sdb
+Resultado: FALSIFICADO
+Capacidad declarada: 512.00 GB
+Capacidad verificada: 31.50 GB
+Bloques escritos: 496000
+Bloques correctos: 30500
+Bloques corruptos: 465500
+Primer bloque defectuoso: #30500 (offset 31.50 GB)
+```
+
+## Desarrollo
+
+```bash
+pip install -e .
+python -m aptrue.cli list
+```
+
+## Licencia
+
+MIT
