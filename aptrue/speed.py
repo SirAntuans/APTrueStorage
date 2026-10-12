@@ -59,9 +59,10 @@ def run_benchmark(device: str, test_size_bytes: int, destructive: bool = False) 
     En modo no destructivo solo mide lectura (el disco debe contener datos).
     """
     result = SpeedResult(device=device)
-    flags = os.O_RDONLY
+    binary = getattr(os, "O_BINARY", 0)
+    flags = os.O_RDONLY | binary
     if destructive:
-        flags = os.O_RDWR | os.O_SYNC if hasattr(os, "O_DIRECT") is False else os.O_RDWR
+        flags = os.O_RDWR | binary
     try:
         fd = os.open(device, flags)
     except PermissionError:

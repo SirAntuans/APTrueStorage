@@ -130,7 +130,8 @@ def verify_device(
     nonce = os.urandom(8)
     start = time.monotonic()
     write_start = time.monotonic()
-    fd = os.open(device, os.O_RDWR | os.O_LARGEFILE if hasattr(os, "O_LARGEFILE") else os.O_RDWR)
+    flags = os.O_RDWR | getattr(os, "O_BINARY", 0) | getattr(os, "O_LARGEFILE", 0)
+    fd = os.open(device, flags)
 
     try:
         for index in range(total_blocks):
