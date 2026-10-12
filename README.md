@@ -113,3 +113,45 @@ python -m aptrue.cli list
 ## Licencia
 
 MIT
+
+## Ejemplos de salida
+
+### `aptrue list`
+```
+Dispositivo     Tipo              Tamaño  Modelo
+/dev/nvme0n1    SSD               476.94 GB  Samsung SSD 970 EVO Plus
+/dev/sdb        MicroSD / USB       59.49 GB  Storage Device
+```
+
+### `aptrue verify /dev/sdb` (disco falsificado)
+```
+¡ADVERTENCIA! Esta prueba es DESTRUCTIVA y borrará todos los datos.
+Verificando /dev/sdb (capacidad declarada 59.49 GB)...
+Dispositivo: /dev/sdb
+Resultado: FALSIFICADO
+Capacidad declarada: 59.49 GB
+Capacidad verificada: 31.50 GB
+Bloques escritos: 57272
+Bloques correctos: 30720
+Bloques corruptos: 26552
+Tiempo: 1874.3s (escritura 20.31 MB/s, lectura 18.45 MB/s)
+Primer bloque defectuoso: #30720 (offset 31.50 GB)
+```
+
+### `aptrue smart /dev/nvme0n1`
+```
+/dev/nvme0n1: SMART PASSED
+  Temperatura: 42°C
+  Horas encendido: 3412
+  Sectores reasignados: 0
+  Sectores pendientes: 0
+  Desgaste NVMe: 3%
+```
+
+## Verificación de integridad de los ejecutables
+
+Cada release incluye `checksums.txt` con los hashes SHA256 de los ejecutables. Después de descargar, valida que el archivo no fue modificado:
+
+```bash
+sha256sum -c checksums.txt --ignore-missing
+```
