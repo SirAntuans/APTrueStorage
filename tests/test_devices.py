@@ -44,3 +44,22 @@ def test_get_device_nonexistent():
     from aptrue.devices import get_device
 
     assert get_device("/dev/noexiste123") is None
+
+
+def test_is_whole_disk_windows_path():
+    import sys
+
+    from aptrue import devices
+
+    if sys.platform == "win32":
+        assert devices.is_whole_disk("\\\\.\\PhysicalDrive1") is True
+    else:
+        # En Linux la función no debe aceptar paths de Windows
+        assert devices.is_whole_disk("\\\\.\\PhysicalDrive1") is False
+
+
+def test_list_devices_returns_list():
+    from aptrue.devices import list_devices
+
+    devs = list_devices()
+    assert isinstance(devs, list)
