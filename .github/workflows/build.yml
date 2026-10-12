@@ -42,12 +42,18 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          curl -sL -o smartmontools.zip https://sourceforge.net/projects/smartmontools/files/smartmontools/7.5/smartmontools-7.5-1.win.zip/download
-          unzip -q smartmontools.zip
-          find . -name "smartctl*" -type f
           mkdir -p bundle
-          cp smartmontools-*/bin/smartctl.exe bundle/ || find . -name smartctl.exe -exec cp {} bundle/ \;
+          curl -sL --retry 3 -o smartmontools.zip "https://sourceforge.net/projects/smartmontools/files/smartmontools/7.5/smartmontools-7.5-1.win.zip/download"
+          file smartmontools.zip
+          if unzip -t smartmontools.zip >/dev/null 2>&1; then
+            unzip -q smartmontools.zip
+            find . -name smartctl.exe -type f -exec cp {} bundle/ \;
+          else
+            choco install smartmontools -y --no-progress
+            cp "/c/Program Files/smartmontools/bin/smartctl.exe" bundle/ || find /c -name smartctl.exe -exec cp {} bundle/ \; 2>/dev/null || true
+          fi
           ls -la bundle/
+          test -f bundle/smartctl.exe
 
       - name: Bundle smartmontools (Linux/macOS)
         if: runner.os != 'Windows'
@@ -66,9 +72,9 @@ jobs:
         shell: bash
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
-            pyinstaller --onefile --name aptrue --add-data "bundle;." aptrue/cli.py
+            pyinstaller --onefile --name aptrue --add-data "bundle;." main.py
           else
-            pyinstaller --onefile --name aptrue --add-data "bundle:." aptrue/cli.py
+            pyinstaller --onefile --name aptrue --add-data "bundle:." main.py
           fi
 
       - name: Rename with platform
