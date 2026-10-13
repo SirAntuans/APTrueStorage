@@ -183,3 +183,32 @@ Cada release incluye `checksums.txt` con los hashes SHA256 de los ejecutables. D
 ```bash
 sha256sum -c checksums.txt --ignore-missing
 ```
+
+## ⚠️ Aviso sobre SmartScreen en Windows ("editor desconocido")
+
+Los ejecutables de este proyecto **no están firmados con un certificado de firma de código**, por lo que al ejecutarlos por primera vez Windows puede mostrar:
+
+> **Windows protegió tu PC** — SmartScreen impidió el inicio de una aplicación desconocida.
+
+Esto **no significa que el ejecutable sea malicioso**: solo que no hay un certificado de entidad certificadora que avale al editor. Para ejecutarlo:
+
+1. Haz clic en **Más información**
+2. Haz clic en **Ejecutar de todas formas**
+
+Puedes verificar que el archivo descargado es legítimo comparando su hash con `checksums.txt` del release:
+
+```powershell
+Get-FileHash .\aptrue-Windows.exe -Algorithm SHA256
+```
+
+### ¿Cómo se remedia de verdad?
+
+La única solución completa es **firmar el ejecutable con un certificado de firma de código**:
+
+| Opción | Coste aproximado | Efecto |
+|---|---|---|
+| Certificado OV (Organización) | ~200-400 USD/año | Quita el aviso tras construir reputación |
+| Certificado EV (validación extendida) | ~300-700 USD/año | Reputación inmediata en SmartScreen |
+| **[SignPath Foundation](https://signpath.org)** (proyectos open source) | **Gratis** | Firma gratuita para proyectos OSS que cumplan requisitos |
+
+Este proyecto es open source y gratuito; mientras no cuente con un patrocinio de firma de código, los ejecutables se distribuyen sin firmar y con checksums verificables.
