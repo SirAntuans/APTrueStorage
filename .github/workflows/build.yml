@@ -116,3 +116,23 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
+          body: |
+            ## APTrueStorage ${{ github.ref_name }}
+
+            Ejecutables autocontenidos (incluyen smartctl) para Windows, Linux y macOS.
+
+            ### ⚠️ Aviso SmartScreen en Windows
+
+            Este ejecutable **no está firmado con un certificado de firma de código** (ver [README](https://github.com/SirAntuans/APTrueStorage#️-aviso-sobre-smartscreen-en-windows-editor-desconocido)).
+            Al ejecutarlo, Windows puede mostrar "Windows protegió tu PC":
+
+            1. Haz clic en **Más información**
+            2. Haz clic en **Ejecutar de todas formas**
+
+            Verifica la integridad del archivo comparando su hash SHA256 con `checksums.txt`:
+
+            ```powershell
+            Get-FileHash .\aptrue-Windows.exe -Algorithm SHA256
+            ```
+
+            > ⚠️ Las pruebas de velocidad con escritura y la verificación de autenticidad son **destructivas**: borran todos los datos del dispositivo. Haz copia de seguridad.
