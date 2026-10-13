@@ -30,3 +30,28 @@ def test_report_summary_with_data():
     assert "PASSED" in text
     assert "34°C" in text
     assert "5%" in text
+
+
+def test_summary_hint_when_unavailable():
+    from aptrue.smart import SmartReport
+
+    rep = SmartReport(device="/dev/sda")
+    rep.hint = "Ejecuta el programa como administrador"
+    text = rep.summary()
+    assert "administrador" in text
+
+
+def test_smartmontools_url_exists():
+    from aptrue.smart import SMARTMONTOOLS_URL
+
+    assert SMARTMONTOOLS_URL.startswith("https://")
+
+
+def test_parse_smartctl_nvme_text():
+    from aptrue.smart import _parse_smartctl_text, SmartReport
+
+    rep = SmartReport(device="/dev/nvme0")
+    text = "Power On Hours:              3412\nPercentage Used:             3%\n"
+    _parse_smartctl_text(rep, text)
+    assert rep.power_on_hours == 3412
+    assert rep.wear_level == 3
